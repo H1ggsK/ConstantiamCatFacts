@@ -1,80 +1,140 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import os
 import aiosqlite
 from db import DB_PATH
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True # Useful for fetching avatars reliably
 bot = commands.Bot(command_prefix="!", intents=intents)
-APPROVE_CHANNEL_ID = int(os.getenv("DISCORD_APPROVE_CHANNEL", ""))
+
+# .env keys
+APPROVE_CHANNEL_ID = int(os.getenv("DISCORD_APPROVE_CHANNEL", "0"))
+ACCEPTED_CHANNEL_ID = int(os.getenv("DISCORD_ACCEPTED_CHANNEL", "0"))
 
 class ApprovalView(discord.ui.View):
-    def __init__(self, fact_id):
+    def __init__(self, fact_id, fact_text, author_name):
         super().__init__(timeout=None)
         self.fact_id = fact_id
+        self.fact_text = fact_text
+        self.author_name = author_name
 
     @discord.ui.button(label="Approve", style=discord.ButtonStyle.green, custom_id="approve_btn")
     async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("UPDATE facts SET status='approved' WHERE id=?", (self.fact_id,))
             await db.commit()
-        await interaction.response.edit_message(content=f"✅ **Fact #{self.fact_id} Approved**", view=None)
+        
+        # Post to Accepted Channel
+        public_channel = bot.get_channel(ACCEPTED_CHANNEL_ID)
+        if public_channel:
+            embed = discord.Embed(
+                title="✨ New Cat Fact Approved",
+                description=self.fact_text,
+                color=0x2ecc71
+            )
+            embed.set_footer(text=f"Submitted by {self.author_name}")
+            await public_channel.send(embed=embed)
+
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(content=f"**Fact #{self.fact_id} Approved & Posted**", view=self)
 
     @discord.ui.button(label="Deny", style=discord.ButtonStyle.red, custom_id="deny_btn")
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute("DELETE FROM facts WHERE id=?", (self.fact_id,))
             await db.commit()
-        await interaction.response.edit_message(content=f"❌ **Fact #{self.fact_id} Denied**", view=None)
+            
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(content=f"**Fact #{self.fact_id} Denied**", view=self)
+
+@tasks.loop(seconds=60)
+async def check_web_submissions():
+    await bot.wait_until_ready()
+    channel = bot.get_channel(APPROVE_CHANNEL_ID)
+    if not channel: return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT id, text, author FROM facts WHERE status='pending'") as cursor:
+            pending_facts = await cursor.fetchall()
+
+        for fact_id, text, author in pending_facts:
+            embed = discord.Embed(title="Web Submission", description=text, color=0x3498db)
+            embed.set_footer(text=f"Author: {author} | ID: {fact_id}")
+            
+            await channel.send(embed=embed, view=ApprovalView(fact_id, text, author))
+            await db.execute("UPDATE facts SET status='voting' WHERE id=?", (fact_id,))
+        
+        if pending_facts:
+            await db.commit()
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-    # Sync loop for checking new pending facts could go here, 
-    # but for simplicity, the prompt asks for /suggest and web submissions.
-    # Hooking web submissions to Discord requires IPC or polling. 
-    # We will poll the DB every 60s for new web submissions (omitted for brevity) 
-    # OR relies on manual triggering. 
-    # Below handles the requested /suggest command.
+    if not check_web_submissions.is_running():
+        check_web_submissions.start()
 
-@bot.tree.command(name="suggest", description="Submit a cat fact")
-async def suggest(interaction: discord.Interaction, fact: str):
+@bot.command(name="suggest")
+async def suggest(ctx, *, fact: str):
+    """Usage: !suggest [cat fact]"""
+    # 1. Delete the trigger message immediately
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+
+    # 2. Database entry
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("INSERT INTO facts (text, author, status) VALUES (?, ?, 'pending')", (fact, interaction.user.name))
+        cursor = await db.execute(
+            "INSERT INTO facts (text, author, status) VALUES (?, ?, 'voting')", 
+            (fact, ctx.author.display_name)
+        )
         await db.commit()
         fact_id = cursor.lastrowid
-    
-    channel = bot.get_channel(APPROVE_CHANNEL_ID)
-    embed = discord.Embed(title="New Fact Submission", description=fact, color=0xffa500)
-    embed.set_footer(text=f"Author: {interaction.user.name} | ID: {fact_id}")
-    await channel.send(embed=embed, view=ApprovalView(fact_id)) # type: ignore
-    await interaction.response.send_message("Fact submitted for review!", ephemeral=True)
 
+    # 3. Formatted "Submission Sent" message in original channel
+    user_pfp = ctx.author.display_avatar.url
+    confirm_embed = discord.Embed(
+        title="Fact Submission Logged",
+        description=f"**Fact:** {fact}",
+        color=0xf1c40f
+    )
+    confirm_embed.set_author(name=ctx.author.display_name, icon_url=user_pfp)
+    confirm_embed.set_footer(text=f"ID: {fact_id} | Status: Pending Review")
+    
+    # Send a temporary confirmation or leave it in chat
+    await ctx.send(embed=confirm_embed, delete_after=30)
+
+    # 4. Send to Staff Approval Channel
+    staff_channel = bot.get_channel(APPROVE_CHANNEL_ID)
+    if staff_channel:
+        staff_embed = discord.Embed(title="Discord Submission", description=fact, color=0xe67e22)
+        staff_embed.set_author(name=ctx.author.display_name, icon_url=user_pfp)
+        staff_embed.set_footer(text=f"Author ID: {ctx.author.id} | Fact ID: {fact_id}")
+        await staff_channel.send(embed=staff_embed, view=ApprovalView(fact_id, fact, ctx.author.display_name))
+
+@bot.command(name="catfact")
+async def catfact(ctx):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1") as cursor:
+            row = await cursor.fetchone()
+            if row: await ctx.send(row[0])
+            else: await ctx.send("No approved cat facts found.")
+
+# SFX play logic remains the same
 @bot.command()
 async def play_sfx(ctx, name: str):
     if name not in ["meow", "click"]: return
     if not ctx.voice_client:
         if ctx.author.voice: await ctx.author.voice.channel.connect()
         else: return
-    
-    # Use FFmpegOpusAudio to skip transcoding if file is valid Opus
-    source = await discord.FFmpegOpusAudio.from_probe(f"/data/{name}.opus")
-    ctx.voice_client.play(source)
-
-@bot.command(name="catfact")
-async def catfact(ctx):
-    """Fetch and display a random approved cat fact."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1"
-        ) as cursor:
-            row = await cursor.fetchone()
-            
-            if row:
-                # row[0] is the 'text' column from the query
-                await ctx.send(row[0])
-            else:
-                await ctx.send("No approved cat facts found in the database.")
+    try:
+        source = await discord.FFmpegOpusAudio.from_probe(f"/data/{name}.opus")
+        ctx.voice_client.play(source)
+    except Exception as e:
+        print(f"SFX Error: {e}")
 
 bot.run(os.getenv("DISCORD_TOKEN", ""))

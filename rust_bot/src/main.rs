@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
         db_pool: pool,
     };
 
-    let account = Account::offline("CatFactsBot");
+    let account = Account::microsoft("example@example.com").await.unwrap();
 
     azalea::ClientBuilder::new()
         .set_account(account)
