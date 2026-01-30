@@ -1,0 +1,28 @@
+# Python Virtual Environments
+venv/
+.venv/
+env/
+bin/
+lib/
+include/
+pyvenv.cfg
+
+# Rust / Cargo
+/rust_bot/target/
+Cargo.lock
+
+# Data and SQLite
+# (You usually don't want to commit the actual DB or large assets)
+data/*.db
+data/*.opus
+
+# Environment Secrets
+.env
+
+# Large Models (if you store Llama-cpp models locally)
+*.gguf
+*.bin
+
+# OS specific
+.DS_Store
+Thumbs.db

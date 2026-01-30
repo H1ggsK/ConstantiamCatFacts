@@ -1,0 +1,30 @@
+services:
+  web:
+    build: ./python
+    command: uvicorn web:app --host 0.0.0.0 --port 8000
+    volumes:
+      - ./data:/data
+    ports:
+      - "8000:8000"
+    mem_limit: 400m
+    restart: unless-stopped
+
+  discord:
+    build: ./python
+    command: python bot.py
+    volumes:
+      - ./data:/data
+    env_file: .env
+    mem_limit: 400m
+    restart: unless-stopped
+
+  minecraft:
+    build: ./rust_bot
+    volumes:
+      - ./data:/data
+    env_file: .env
+    mem_limit: 400m
+    restart: unless-stopped
+
+volumes:
+  data:
