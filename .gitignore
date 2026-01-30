@@ -15,6 +15,7 @@ Cargo.lock
 # (You usually don't want to commit the actual DB or large assets)
 data/*.db
 data/*.opus
+data/*.mp3
 
 # Environment Secrets
 .env
