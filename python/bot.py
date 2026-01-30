@@ -6,10 +6,9 @@ from db import DB_PATH
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True # Useful for fetching avatars reliably
+intents.members = True 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# .env keys
 APPROVE_CHANNEL_ID = int(os.getenv("DISCORD_APPROVE_CHANNEL", "0"))
 ACCEPTED_CHANNEL_ID = int(os.getenv("DISCORD_ACCEPTED_CHANNEL", "0"))
 
@@ -26,7 +25,6 @@ class ApprovalView(discord.ui.View):
             await db.execute("UPDATE facts SET status='approved' WHERE id=?", (self.fact_id,))
             await db.commit()
         
-        # Post to Accepted Channel
         public_channel = bot.get_channel(ACCEPTED_CHANNEL_ID)
         if public_channel:
             embed = discord.Embed(
@@ -80,13 +78,11 @@ async def on_ready():
 @bot.command(name="suggest")
 async def suggest(ctx, *, fact: str):
     """Usage: !suggest [cat fact]"""
-    # 1. Delete the trigger message immediately
     try:
         await ctx.message.delete()
     except:
         pass
 
-    # 2. Database entry
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             "INSERT INTO facts (text, author, status) VALUES (?, ?, 'voting')", 
@@ -95,7 +91,6 @@ async def suggest(ctx, *, fact: str):
         await db.commit()
         fact_id = cursor.lastrowid
 
-    # 3. Formatted "Submission Sent" message in original channel
     user_pfp = ctx.author.display_avatar.url
     confirm_embed = discord.Embed(
         title="Fact Submission Logged",
@@ -105,10 +100,8 @@ async def suggest(ctx, *, fact: str):
     confirm_embed.set_author(name=ctx.author.display_name, icon_url=user_pfp)
     confirm_embed.set_footer(text=f"ID: {fact_id} | Status: Pending Review")
     
-    # Send a temporary confirmation or leave it in chat
-    await ctx.send(embed=confirm_embed, delete_after=30)
+    await ctx.send(embed=confirm_embed)
 
-    # 4. Send to Staff Approval Channel
     staff_channel = bot.get_channel(APPROVE_CHANNEL_ID)
     if staff_channel:
         staff_embed = discord.Embed(title="Discord Submission", description=fact, color=0xe67e22)
@@ -124,7 +117,6 @@ async def catfact(ctx):
             if row: await ctx.send(row[0])
             else: await ctx.send("No approved cat facts found.")
 
-# SFX play logic remains the same
 @bot.command()
 async def play_sfx(ctx, name: str):
     if name not in ["meow", "click"]: return
