@@ -9,6 +9,7 @@ services:
     env_file: .env
     volumes:
       - ./data:/data
+      - ./data/azalea-auth:/root/.cache/azalea
 
   discord:
     image: h1ggsk/catfacts-discord:latest
