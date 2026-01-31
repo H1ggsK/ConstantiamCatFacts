@@ -29,3 +29,17 @@ services:
     volumes:
       - ./data:/data
     command: uvicorn web:app --host 0.0.0.0 --port 8000
+
+  caddy:
+    image: caddy:latest
+    container_name: caddy_proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy_data:/data
+      - ./caddy_config:/config
+    depends_on:
+      - web
