@@ -1,4 +1,4 @@
-FROM rust:1.82-slim as builder
+FROM rust:1.85-slim as builder
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
