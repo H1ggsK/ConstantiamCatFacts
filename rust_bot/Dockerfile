@@ -1,6 +1,8 @@
+# Build Stage
 FROM rust:1.85-slim as builder
 WORKDIR /app
 
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
@@ -10,6 +12,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 RUN cargo +nightly-2024-10-01 build --release
 
