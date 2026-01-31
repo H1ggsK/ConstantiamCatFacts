@@ -6,12 +6,12 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     git \
     curl \
-    && rustup toolchain install nightly \
+    && rustup toolchain install nightly-2024-10-01 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
-RUN cargo +nightly build --release
+RUN cargo +nightly-2024-10-01 build --release
 
 FROM debian:bookworm-slim
 WORKDIR /app
