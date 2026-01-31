@@ -165,7 +165,7 @@ async def watching(ctx, *, text: str):
         return
     activity = discord.Activity(type=discord.ActivityType.watching, name=text)
     await bot.change_presence(activity=activity)
-    await ctx.send(f"👀 Now watching **{text}**")
+    await ctx.send(f"Now watching **{text}**")
 
 @bot.command(name="stopwatching")
 async def stopwatching(ctx):
