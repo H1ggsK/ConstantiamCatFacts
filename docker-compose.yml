@@ -19,6 +19,7 @@ services:
     env_file: .env
     volumes:
       - ./data:/data
+    command: python bot.py
 
   web:
     image: h1ggsk/catfacts-web:latest
@@ -29,3 +30,4 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/data
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
