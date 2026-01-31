@@ -1,8 +1,17 @@
-FROM rust:1.84.1-slim as builder
+FROM rust:1.85-slim as builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    git \
+    curl \
+    && rustup toolchain install nightly-2024-10-01 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY . .
-RUN cargo build --release
+
+RUN cargo +nightly-2024-10-01 build --release
 
 FROM debian:bookworm-slim
 WORKDIR /app
