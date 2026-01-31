@@ -4,19 +4,21 @@ use sqlx::sqlite::SqlitePool;
 use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use anyhow::Result; 
 
-#[derive(Clone)]
+#[derive(Clone, Component, Default)]
 struct State {
     msg_count: Arc<Mutex<u32>>,
     msg_threshold: u32,
-    db_pool: SqlitePool,
+    db_pool: Option<SqlitePool>,
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     let _ = dotenv::dotenv();
+
     let db_url = "sqlite:////data/catfacts.db";
-    let pool = SqlitePool::connect(db_url).await?;
+    let pool = SqlitePool::connect(db_url).await.map_err(|e| anyhow::anyhow!(e))?;
 
     let threshold = env::var("CHAT_INTERVAL")
         .unwrap_or_else(|_| "100".to_string())
@@ -26,24 +28,27 @@ async fn main() -> anyhow::Result<()> {
     let bot_state = State {
         msg_count: Arc::new(Mutex::new(0)),
         msg_threshold: threshold,
-        db_pool: pool,
+        db_pool: Some(pool),
     };
 
     let email = env::var("MC_EMAIL").expect("MC_EMAIL required in .env");
-    let server_addr = env::var("MC_SERVER_IP").expect("MC_SERVER_IP required");
+    let server_addr_str = env::var("MC_SERVER_IP").expect("MC_SERVER_IP required");
 
+    println!("Authenticating as {}...", email);
     let account = Account::microsoft(&email).await.expect("Failed to create Microsoft account");
+
+    println!("Connecting to {}...", server_addr_str);
 
     azalea::ClientBuilder::new()
         .set_handler(handle)
         .set_state(bot_state)
-        .start(&account, server_addr)
+        .start(account, server_addr_str.as_str())
         .await?;
-
+        
     Ok(())
 }
 
-async fn handle(mut bot: Client, event: Event, state: State) -> anyhow::Result<()> {
+async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
     if let Event::Chat(chat_packet) = event {
         let msg = chat_packet.message().to_string();
 
@@ -57,12 +62,15 @@ async fn handle(mut bot: Client, event: Event, state: State) -> anyhow::Result<(
         if *count >= state.msg_threshold {
             *count = 0;
 
-            let row: Option<(String,)> = sqlx::query_as("SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1")        
-                .fetch_optional(&state.db_pool)
-                .await?;
+            if let Some(pool) = &state.db_pool {
+                let row: Option<(String,)> = sqlx::query_as("SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1")
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))?;
 
-            if let Some((fact,)) = row {
-                bot.chat(&format!("Cat Fact: {}", fact));
+                if let Some((fact,)) = row {
+                    let _ = bot.chat(&format!("Cat Fact: {}", fact));
+                }
             }
         }
     }

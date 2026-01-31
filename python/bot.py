@@ -11,6 +11,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 APPROVE_CHANNEL_ID = int(os.getenv("DISCORD_APPROVE_CHANNEL", "0"))
 ACCEPTED_CHANNEL_ID = int(os.getenv("DISCORD_ACCEPTED_CHANNEL", "0"))
+ADMIN_ROLE_ID = int(os.getenv("ADMIN_ROLE_ID", 0))
 
 class ApprovalView(discord.ui.View):
     def __init__(self, fact_id, fact_text, author_name):
@@ -128,5 +129,24 @@ async def play_sfx(ctx, name: str):
         ctx.voice_client.play(source)
     except Exception as e:
         print(f"SFX Error: {e}")
+
+@bot.command(name="watching")
+async def watching(ctx, *, text: str):
+    """Sets the bot status to 'Watching <text>'."""
+    if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
+        await ctx.send("You don't have permission to use this command.")
+        return
+    activity = discord.Activity(type=discord.ActivityType.watching, name=text)
+    await bot.change_presence(activity=activity)
+    await ctx.send(f"👀 Now watching **{text}**")
+
+@bot.command(name="stopwatching")
+async def stopwatching(ctx):
+    """Resets the bot status."""
+    if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
+        await ctx.send("You don't have permission to use this command.")
+        return
+    await bot.change_presence(activity=None)
+    await ctx.send("Stopped watching everything.")
 
 bot.run(os.getenv("DISCORD_TOKEN", ""))
