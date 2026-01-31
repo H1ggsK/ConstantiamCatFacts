@@ -30,17 +30,14 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let email = env::var("MC_EMAIL").expect("MC_EMAIL required in .env");
-    
+    let server_addr = env::var("MC_SERVER_IP").expect("MC_SERVER_IP required");
+
     let account = Account::microsoft(&email).await.expect("Failed to create Microsoft account");
 
     azalea::ClientBuilder::new()
-        .set_account(account)
         .set_handler(handle)
         .set_state(bot_state)
-        .start(azalea::Join {
-            address: env::var("MC_SERVER_IP").expect("MC_SERVER_IP required").try_into()?,
-            ..Default::default()
-        })
+        .start(&account, server_addr)
         .await?;
 
     Ok(())
