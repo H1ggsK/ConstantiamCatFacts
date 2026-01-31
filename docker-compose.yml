@@ -22,6 +22,7 @@ services:
     build: ./rust_bot
     volumes:
       - ./data:/data
+      - ./rust_bot_cache:/.azalea
     env_file: .env
     mem_limit: 400m
     restart: unless-stopped

@@ -14,17 +14,24 @@ struct State {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let _ = dotenv::dotenv();
     let db_url = "sqlite:////data/catfacts.db";
     let pool = SqlitePool::connect(db_url).await?;
-    
-    let threshold = env::var("CHAT_INTERVAL").unwrap_or("10000".to_string()).parse().unwrap();
+
+    let threshold = env::var("CHAT_INTERVAL")
+        .unwrap_or_else(|_| "100".to_string())
+        .parse()
+        .unwrap();
+
     let bot_state = State {
         msg_count: Arc::new(Mutex::new(0)),
         msg_threshold: threshold,
         db_pool: pool,
     };
 
-    let account = Account::microsoft("example@example.com").await.unwrap();
+    let email = env::var("MC_EMAIL").expect("MC_EMAIL required in .env");
+    
+    let account = Account::microsoft(&email).await.expect("Failed to create Microsoft account");
 
     azalea::ClientBuilder::new()
         .set_account(account)
@@ -42,8 +49,7 @@ async fn main() -> anyhow::Result<()> {
 async fn handle(mut bot: Client, event: Event, state: State) -> anyhow::Result<()> {
     if let Event::Chat(chat_packet) = event {
         let msg = chat_packet.message().to_string();
-        
-        // Filter whispers/commands
+
         if msg.starts_with("&d") || msg.starts_with("&5") {
             return Ok(());
         }
@@ -53,9 +59,8 @@ async fn handle(mut bot: Client, event: Event, state: State) -> anyhow::Result<(
 
         if *count >= state.msg_threshold {
             *count = 0;
-            
-            // Fetch random fact
-            let row: Option<(String,)> = sqlx::query_as("SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1")
+
+            let row: Option<(String,)> = sqlx::query_as("SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1")        
                 .fetch_optional(&state.db_pool)
                 .await?;
 
