@@ -10,4 +10,6 @@ sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite"] }
 dotenv = "0.15"
 rand = "0.8"
 
-socks5-impl = "=0.6.1"
+[patch.crates-io]
+home = { vendor = true, version = "=0.5.9" }
+socks5-impl = { vendor = true, version = "=0.6.1" }
