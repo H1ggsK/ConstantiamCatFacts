@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
     let pool = SqlitePool::connect(db_url).await.map_err(|e| anyhow::anyhow!(e))?;
 
     let threshold = env::var("CHAT_INTERVAL")
-        .unwrap_or_else(|_| "100".to_string())
+        .unwrap_or_else(|_| "1000".to_string())
         .parse()
         .unwrap();
 
