@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request, Form, Depends
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse, JSONResponse
 import time
 from db import init_db, get_db
 
@@ -36,14 +35,29 @@ async def home():
                 </div>
                 <button type="submit" class="w-full bg-[#222] hover:bg-[#333] border border-[#333] text-emerald-400 py-2 text-sm transition-colors">[ UPLOAD ]</button>
             </form>
+            <div class="mt-4 text-center">
+                <a href="/fact" class="text-xs text-gray-600 hover:text-emerald-600 transition-colors">>> VIEW_RANDOM_JSON</a>
+            </div>
         </div>
     </body>
     </html>
     """
 
+@app.get("/fact")
+async def get_random_fact(db=Depends(get_db)):
+    """API endpoint to get a random approved fact in JSON format."""
+    async with db.execute("SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1") as cursor:
+        row = await cursor.fetchone()
+        
+    if row:
+        # Returns exactly: {"data": ["The cat fact here"]}
+        return {"data": [row["text"]]}
+    else:
+        return {"data": ["No approved facts available."]}
+
 @app.post("/submit")
 async def submit_fact(request: Request, fact: str = Form(...), author: str = Form(...), db=Depends(get_db)):
-    client_ip = request.client.host # type: ignore
+    client_ip = request.client.host
     now = time.time()
     
     # 10 Minute Rate Limit (600 seconds)
