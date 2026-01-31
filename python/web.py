@@ -5,7 +5,6 @@ from db import init_db, get_db
 
 app = FastAPI()
 
-# Simple in-memory rate limiter (IP: timestamp)
 _rate_limit = {}
 
 @app.on_event("startup")
@@ -50,7 +49,6 @@ async def get_random_fact(db=Depends(get_db)):
         row = await cursor.fetchone()
         
     if row:
-        # Returns exactly: {"data": ["The cat fact here"]}
         return {"data": [row["text"]]}
     else:
         return {"data": ["No approved facts available."]}
@@ -60,7 +58,6 @@ async def submit_fact(request: Request, fact: str = Form(...), author: str = For
     client_ip = request.client.host
     now = time.time()
     
-    # 10 Minute Rate Limit (600 seconds)
     if client_ip in _rate_limit and now - _rate_limit[client_ip] < 600:
         return HTMLResponse("<body style='background:#111;color:#f55;font-family:monospace'>ERR: RATE_LIMIT_EXCEEDED. TRY_LATER.</body>", status_code=429)
     
