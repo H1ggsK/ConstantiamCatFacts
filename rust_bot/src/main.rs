@@ -49,7 +49,6 @@ async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
     if let Event::Chat(chat_packet) = event {
         let msg = chat_packet.message().to_string();
 
-        // 1. Deduplicate: ignore if same as last message
         {
             let mut last = state.last_msg.lock().await;
             if msg == *last { return Ok(()); }
