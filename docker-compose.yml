@@ -1,31 +1,30 @@
+version: '3.8'
+
 services:
-  web:
-    build: ./python
-    command: uvicorn web:app --host 0.0.0.0 --port 8000
+  minecraft:
+    image: h1ggsk/catfacts-rust:latest
+    container_name: catfacts_rust
+    restart: unless-stopped
+    mem_limit: 400m
+    env_file: .env
     volumes:
       - ./data:/data
-    ports:
-      - "8000:8000"
-    mem_limit: 400m
-    restart: unless-stopped
 
   discord:
-    build: ./python
-    command: python bot.py
+    image: h1ggsk/catfacts-discord:latest
+    container_name: catfacts_discord
+    restart: unless-stopped
+    mem_limit: 400m
+    env_file: .env
     volumes:
       - ./data:/data
-    env_file: .env
-    mem_limit: 400m
-    restart: unless-stopped
 
-  minecraft:
-    build: ./rust_bot
+  web:
+    image: h1ggsk/catfacts-web:latest
+    container_name: catfacts_web
+    restart: unless-stopped
+    mem_limit: 400m
+    ports:
+      - "8000:8000"
     volumes:
       - ./data:/data
-      - ./rust_bot_cache:/.azalea
-    env_file: .env
-    mem_limit: 400m
-    restart: unless-stopped
-
-volumes:
-  data:
