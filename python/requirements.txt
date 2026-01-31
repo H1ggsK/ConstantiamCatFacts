@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
-discord.py
+discord.py[voice]
 aiosqlite
 python-multipart
+PyNaCl
