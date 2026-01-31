@@ -1,9 +1,7 @@
-cargo-features = ["edition2024"]
-
 [package]
 name = "cat_bot"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 azalea = "0.11.0+mc1.21.4"
@@ -12,5 +10,4 @@ sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite"] }
 dotenv = "0.15"
 rand = "0.8"
 
-[patch.crates-io]
-socks5-impl = { git = "https://github.com/skf-sh/socks5-impl.git", rev = "099a804" }
+socks5-impl = "=0.6.1"
