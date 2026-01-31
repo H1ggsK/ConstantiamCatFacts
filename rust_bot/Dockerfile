@@ -1,14 +1,17 @@
-FROM rust:nightly-slim as builder
+FROM rust:1.85-slim as builder
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     git \
+    curl \
+    && rustup toolchain install nightly \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
-RUN cargo build --release
+
+RUN cargo +nightly build --release
 
 FROM debian:bookworm-slim
 WORKDIR /app
