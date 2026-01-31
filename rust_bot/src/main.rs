@@ -51,6 +51,8 @@ async fn main() -> Result<()> {
 async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
     if let Event::Chat(chat_packet) = event {
         let msg = chat_packet.message().to_string();
+        
+        println!("[CHAT] {}", msg);
 
         if msg.starts_with("&d") || msg.starts_with("&5") {
             return Ok(());
@@ -58,6 +60,10 @@ async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
 
         let mut count = state.msg_count.lock().await;
         *count += 1;
+        
+        if *count % 10 == 0 {
+            println!("Count: {}/{}", *count, state.msg_threshold);
+        }
 
         if *count >= state.msg_threshold {
             *count = 0;
@@ -69,6 +75,7 @@ async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
                     .map_err(|e| anyhow::anyhow!(e))?;
 
                 if let Some((fact,)) = row {
+                    println!("Sending Fact: {}", fact);
                     let _ = bot.chat(&format!("Cat Fact: {}", fact));
                 }
             }
