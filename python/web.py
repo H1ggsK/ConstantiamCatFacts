@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Form, Depends
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 import time
 from db import init_db, get_db
 
@@ -15,28 +15,45 @@ async def startup():
 async def home():
     return """
     <!DOCTYPE html>
-    <html class="bg-[#111] text-[#eee] font-mono">
+    <html lang="en">
     <head>
-        <title>Cat Facts Node</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Cat Facts | Submit</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+        <style>body { font-family: 'Inter', sans-serif; }</style>
     </head>
-    <body class="h-screen flex items-center justify-center">
-        <div class="w-full max-w-md p-6 border border-[#333] rounded bg-[#161616]">
-            <h1 class="text-xl mb-4 text-emerald-400 font-bold tracking-tighter">>> SUBMIT_FACT_PROTOCOL</h1>
-            <form action="/submit" method="post" class="space-y-4">
+    <body class="bg-[#0f1115] text-slate-200 min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-[#1a1d23] border border-slate-800 rounded-2xl shadow-2xl p-8">
+            <header class="mb-8 text-center">
+                <h1 class="text-2xl font-semibold text-white mb-2">Submit a Cat Fact</h1>
+                <p class="text-slate-400 text-sm">Contribute to the global cat knowledge base.</p>
+            </header>
+            
+            <form action="/submit" method="post" class="space-y-6">
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">FACT_PAYLOAD</label>
-                    <textarea name="fact" required rows="3" class="w-full bg-[#0a0a0a] border border-[#333] p-2 text-sm focus:border-emerald-500 outline-none"></textarea>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">The Fact</label>
+                    <textarea name="fact" required rows="4" 
+                        placeholder="Did you know cats have 32 muscles in each ear?"
+                        class="w-full bg-[#111318] border border-slate-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none"></textarea>
                 </div>
+                
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">OPERATOR_ALIAS</label>
-                    <input type="text" name="author" required class="w-full bg-[#0a0a0a] border border-[#333] p-2 text-sm focus:border-emerald-500 outline-none">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Your Name</label>
+                    <input type="text" name="author" required placeholder="Anonymous Cat Lover"
+                        class="w-full bg-[#111318] border border-slate-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all">
                 </div>
-                <button type="submit" class="w-full bg-[#222] hover:bg-[#333] border border-[#333] text-emerald-400 py-2 text-sm transition-colors">[ UPLOAD ]</button>
+                
+                <button type="submit" 
+                    class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20">
+                    Submit Fact
+                </button>
             </form>
-            <div class="mt-4 text-center">
-                <a href="/fact" class="text-xs text-gray-600 hover:text-emerald-600 transition-colors">>> VIEW_RANDOM_JSON</a>
-            </div>
+            
+            <footer class="mt-8 pt-6 border-t border-slate-800 text-center">
+                <a href="/fact" class="text-xs text-slate-500 hover:text-indigo-400 transition-colors">View Random Fact (JSON API)</a>
+            </footer>
         </div>
     </body>
     </html>
@@ -44,14 +61,9 @@ async def home():
 
 @app.get("/fact")
 async def get_random_fact(db=Depends(get_db)):
-    """API endpoint to get a random approved fact in JSON format."""
     async with db.execute("SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1") as cursor:
         row = await cursor.fetchone()
-        
-    if row:
-        return {"data": [row["text"]]}
-    else:
-        return {"data": ["No approved facts available."]}
+    return {"data": [row["text"]]} if row else {"data": ["No approved facts available."]}
 
 @app.post("/submit")
 async def submit_fact(request: Request, fact: str = Form(...), author: str = Form(...), db=Depends(get_db)):
@@ -59,10 +71,19 @@ async def submit_fact(request: Request, fact: str = Form(...), author: str = For
     now = time.time()
     
     if client_ip in _rate_limit and now - _rate_limit[client_ip] < 600:
-        return HTMLResponse("<body style='background:#111;color:#f55;font-family:monospace'>ERR: RATE_LIMIT_EXCEEDED. TRY_LATER.</body>", status_code=429)
+        return HTMLResponse(content="Rate limit exceeded. Please try again in 10 minutes.", status_code=429)
     
     _rate_limit[client_ip] = now
-    
-    await db.execute("INSERT INTO facts (text, author, ip) VALUES (?, ?, ?)", (fact, author, client_ip))
+    await db.execute("INSERT INTO facts (text, author, status) VALUES (?, ?, 'pending')", (fact, author))
     await db.commit()
-    return HTMLResponse("<body style='background:#111;color:#5f5;font-family:monospace'>ACK: SUBMISSION_RECEIVED.</body>")
+    
+    return HTMLResponse(content=f"""
+    <body class="bg-[#0f1115] text-slate-200 flex flex-col items-center justify-center h-screen font-sans">
+        <div class="text-center bg-[#1a1d23] border border-slate-800 p-10 rounded-2xl shadow-xl">
+            <div class="text-indigo-500 text-5xl mb-4">✔</div>
+            <h1 class="text-xl font-bold mb-2 text-white">Submission Received</h1>
+            <p class="text-slate-400 mb-6 text-sm">Your fact is now in the queue for moderator approval.</p>
+            <a href="/" class="text-indigo-400 hover:underline text-sm">← Back to home</a>
+        </div>
+    </body>
+    """)
