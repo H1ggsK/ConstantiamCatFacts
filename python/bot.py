@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 import os
 import aiosqlite
+import time
 from db import DB_PATH
 
 intents = discord.Intents.default()
@@ -12,6 +13,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 APPROVE_CHANNEL_ID = int(os.getenv("DISCORD_APPROVE_CHANNEL", "0"))
 ACCEPTED_CHANNEL_ID = int(os.getenv("DISCORD_ACCEPTED_CHANNEL", "0"))
 ADMIN_ROLE_ID = int(os.getenv("ADMIN_ROLE_ID", 0))
+
+last_voice_interaction = 0
 
 class ApprovalView(discord.ui.View):
     def __init__(self, fact_id, fact_text, author_name):
@@ -70,15 +73,25 @@ async def check_web_submissions():
         if pending_facts:
             await db.commit()
 
+@tasks.loop(seconds=5)
+async def check_voice_inactivity():
+    global last_voice_interaction
+    if bot.voice_clients:
+        if time.time() - last_voice_interaction > 60:
+            for vc in bot.voice_clients:
+                if vc.is_connected():
+                    await vc.disconnect()
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
     if not check_web_submissions.is_running():
         check_web_submissions.start()
+    if not check_voice_inactivity.is_running():
+        check_voice_inactivity.start()
 
 @bot.command(name="suggest")
 async def suggest(ctx, *, fact: str):
-    """Usage: !suggest [cat fact]"""
     try:
         await ctx.message.delete()
     except:
@@ -118,21 +131,35 @@ async def catfact(ctx):
             if row: await ctx.send(row[0])
             else: await ctx.send("No approved cat facts found.")
 
-@bot.command()
-async def play_sfx(ctx, name: str):
-    if name not in ["meow", "click"]: return
+async def play_sound_internal(ctx, filename):
+    global last_voice_interaction
     if not ctx.voice_client:
-        if ctx.author.voice: await ctx.author.voice.channel.connect()
-        else: return
+        if ctx.author.voice:
+            await ctx.author.voice.channel.connect()
+        else:
+            await ctx.send("You need to be in a voice channel!")
+            return
+    
+    last_voice_interaction = time.time()
     try:
-        source = await discord.FFmpegOpusAudio.from_probe(f"/data/{name}.opus")
+        source = await discord.FFmpegOpusAudio.from_probe(f"/data/{filename}.opus")
+        if ctx.voice_client.is_playing():
+            ctx.voice_client.stop()
         ctx.voice_client.play(source)
     except Exception as e:
         print(f"SFX Error: {e}")
+        await ctx.send(f"Error playing sound: {e}")
+
+@bot.command(name="meow")
+async def meow(ctx):
+    await play_sound_internal(ctx, "meow")
+
+@bot.command(name="click")
+async def click(ctx):
+    await play_sound_internal(ctx, "click")
 
 @bot.command(name="watching")
 async def watching(ctx, *, text: str):
-    """Sets the bot status to 'Watching <text>'."""
     if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
         await ctx.send("You don't have permission to use this command.")
         return
@@ -142,7 +169,6 @@ async def watching(ctx, *, text: str):
 
 @bot.command(name="stopwatching")
 async def stopwatching(ctx):
-    """Resets the bot status."""
     if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
         await ctx.send("You don't have permission to use this command.")
         return
