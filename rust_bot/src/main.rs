@@ -5,11 +5,12 @@ use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use anyhow::Result;
+use std::time::Duration; // Needed for sleep
 
 #[derive(Clone, Component, Default)]
 struct State {
     msg_count: Arc<Mutex<u32>>,
-    last_msg: Arc<Mutex<String>>, // Added for deduplication
+    last_msg: Arc<Mutex<String>>,
     msg_threshold: u32,
     db_pool: Option<SqlitePool>,
 }
@@ -35,14 +36,36 @@ async fn main() -> Result<()> {
     let email = env::var("MC_EMAIL").expect("MC_EMAIL required");
     let server_addr_str = env::var("MC_SERVER_IP").expect("MC_SERVER_IP required");
 
-    let account = Account::microsoft(&email).await?;
-    azalea::ClientBuilder::new()
-        .set_handler(handle)
-        .set_state(bot_state)
-        .start(account, server_addr_str.as_str())
-        .await?;
+    loop {
+        println!("Authenticating as {}...", email);
         
-    Ok(())
+        let account_result = Account::microsoft(&email).await;
+
+        match account_result {
+            Ok(account) => {
+                println!("Connecting to {}...", server_addr_str);
+                
+                let result = azalea::ClientBuilder::new()
+                    .set_handler(handle)
+                    .set_state(bot_state.clone())
+                    .start(account, server_addr_str.as_str())
+                    .await;
+
+                if let Err(e) = result {
+                    println!("Bot disconnected with error: {:?}", e);
+                } else {
+                    println!("Bot disconnected normally.");
+                }
+            }
+            Err(e) => {
+                println!("Authentication failed: {:?}", e);
+            }
+        }
+
+        println!("Waiting 30 seconds before reconnecting to avoid spam kick...");
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        println!("Restarting loop...");
+    }
 }
 
 async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
@@ -73,9 +96,11 @@ async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
             if let Some(pool) = &state.db_pool {
                 let row: Option<(String,)> = sqlx::query_as("SELECT text FROM facts WHERE status='approved' ORDER BY RANDOM() LIMIT 1")
                     .fetch_optional(pool)
-                    .await?;
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))?;
 
                 if let Some((fact,)) = row {
+                    println!("Sending Fact: {}", fact);
                     let _ = bot.chat(&format!("Cat Fact: {}", fact));
                 }
             }
