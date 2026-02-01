@@ -5,7 +5,8 @@ use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use anyhow::Result;
-use std::time::Duration; // Needed for sleep
+use std::time::Duration;
+use std::path::PathBuf;
 
 #[derive(Clone, Component, Default)]
 struct State {
@@ -38,8 +39,14 @@ async fn main() -> Result<()> {
 
     loop {
         println!("Authenticating as {}...", email);
-        
-        let account_result = Account::microsoft(&email).await;
+
+        let account_result = azalea::Account::microsoft_with_opts(
+            &email,
+            azalea::AuthOpts {
+                cache_file: Some(PathBuf::from("/data/auth.json")),
+                ..Default::default()
+            }
+        ).await;
 
         match account_result {
             Ok(account) => {
@@ -52,19 +59,19 @@ async fn main() -> Result<()> {
                     .await;
 
                 if let Err(e) = result {
-                    println!("Bot disconnected with error: {:?}", e);
+                    println!("❌ Bot disconnected with error: {:?}", e);
                 } else {
-                    println!("Bot disconnected normally.");
+                    println!("⚠️ Bot disconnected normally.");
                 }
             }
             Err(e) => {
-                println!("Authentication failed: {:?}", e);
+                println!("❌ Authentication failed: {:?}", e);
             }
         }
 
-        println!("Waiting 30 seconds before reconnecting to avoid spam kick...");
+        println!("⏳ Waiting 30 seconds before reconnecting...");
         tokio::time::sleep(Duration::from_secs(30)).await;
-        println!("Restarting loop...");
+        println!("♻️ Restarting loop...");
     }
 }
 
@@ -88,7 +95,7 @@ async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
         *count += 1;
 
         if *count % 50 == 0 {
-            println!("Progress: {}/{}", *count, state.msg_threshold);
+            println!("📊 Progress: {}/{}", *count, state.msg_threshold);
         }
 
         if *count >= state.msg_threshold {
@@ -100,7 +107,7 @@ async fn handle(bot: Client, event: Event, state: State) -> Result<()> {
                     .map_err(|e| anyhow::anyhow!(e))?;
 
                 if let Some((fact,)) = row {
-                    println!("Sending Fact: {}", fact);
+                    println!("🐱 Sending Fact: {}", fact);
                     let _ = bot.chat(&format!("Cat Fact: {}", fact));
                 }
             }
