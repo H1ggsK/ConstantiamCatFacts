@@ -6,7 +6,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use anyhow::Result;
 use std::time::Duration;
-use std::path::PathBuf;
 
 #[derive(Clone, Component, Default)]
 struct State {
@@ -40,13 +39,7 @@ async fn main() -> Result<()> {
     loop {
         println!("Authenticating as {}...", email);
 
-        let account_result = azalea::Account::microsoft_with_opts(
-            &email,
-            azalea::AuthOpts {
-                cache_file: Some(PathBuf::from("/data/auth.json")),
-                ..Default::default()
-            }
-        ).await;
+        let account_result = Account::microsoft(&email).await;
 
         match account_result {
             Ok(account) => {
