@@ -18,6 +18,7 @@ services:
     env_file: .env
     volumes:
       - ./data:/data
+    env_file: .env
     command: python bot.py
 
   web:
