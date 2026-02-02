@@ -82,8 +82,25 @@ async def check_voice_inactivity():
                 if vc.is_connected():
                     await vc.disconnect()
 
+async def init_db():
+    if not os.path.exists(os.path.dirname(DB_PATH)):
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS facts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT NOT NULL,
+                author TEXT,
+                status TEXT DEFAULT 'pending',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ip TEXT
+            )
+        """)
+        await db.commit()
+
 @bot.event
 async def on_ready():
+    await init_db()
     print(f"Logged in as {bot.user}")
     if not check_web_submissions.is_running():
         check_web_submissions.start()
@@ -91,7 +108,11 @@ async def on_ready():
         check_voice_inactivity.start()
 
 @bot.command(name="suggest")
-async def suggest(ctx, *, fact: str):
+async def suggest(ctx, *, fact: str = None):
+    if fact is None:
+        await ctx.send("❌ Usage: `!suggest <your cat fact>`")
+        return
+
     try:
         await ctx.message.delete()
     except:
@@ -100,7 +121,7 @@ async def suggest(ctx, *, fact: str):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             "INSERT INTO facts (text, author, status) VALUES (?, ?, 'voting')", 
-            (fact, ctx.author.display_name)
+            (fact, ctx.author.name)
         )
         await db.commit()
         fact_id = cursor.lastrowid
@@ -111,7 +132,7 @@ async def suggest(ctx, *, fact: str):
         description=f"**Fact:** {fact}",
         color=0xf1c40f
     )
-    confirm_embed.set_author(name=ctx.author.display_name, icon_url=user_pfp)
+    confirm_embed.set_author(name=ctx.author.name, icon_url=user_pfp)
     confirm_embed.set_footer(text=f"ID: {fact_id} | Status: Pending Review")
     
     await ctx.send(embed=confirm_embed)
@@ -119,9 +140,9 @@ async def suggest(ctx, *, fact: str):
     staff_channel = bot.get_channel(APPROVE_CHANNEL_ID)
     if staff_channel:
         staff_embed = discord.Embed(title="Discord Submission", description=fact, color=0xe67e22)
-        staff_embed.set_author(name=ctx.author.display_name, icon_url=user_pfp)
+        staff_embed.set_author(name=ctx.author.name, icon_url=user_pfp)
         staff_embed.set_footer(text=f"Author ID: {ctx.author.id} | Fact ID: {fact_id}")
-        await staff_channel.send(embed=staff_embed, view=ApprovalView(fact_id, fact, ctx.author.display_name))
+        await staff_channel.send(embed=staff_embed, view=ApprovalView(fact_id, fact, ctx.author.name))
 
 @bot.command(name="catfact")
 async def catfact(ctx):
