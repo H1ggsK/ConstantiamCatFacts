@@ -1,15 +1,4 @@
 services:
-  minecraft:
-    image: h1ggsk/catfacts-rust:latest
-    container_name: catfacts_rust
-    restart: unless-stopped
-    mem_limit: 400m
-    env_file: .env
-    environment:
-      - HOME=/data
-    volumes:
-      - ./data:/data
-
   discord:
     image: h1ggsk/catfacts-discord:latest
     container_name: catfacts_discord
