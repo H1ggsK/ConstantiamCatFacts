@@ -11,6 +11,7 @@ import meteordevelopment.orbit.EventHandler;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
@@ -63,6 +64,16 @@ public class CatFactsModule extends Module {
         .name("fact-source")
         .description("Which API to fetch cat facts from.")
         .defaultValue(FactSource.RANDOM)
+        .build()
+    );
+
+    /**
+     * The fallback message sent when the API fails to return a valid fact.
+     */
+    private final Setting<String> fallbackMessage = sgGeneral.add(new StringSetting.Builder()
+        .name("fallback-message")
+        .description("Message to send if the API fails to return a fact.")
+        .defaultValue("Cats are mysterious...")
         .build()
     );
 
@@ -202,7 +213,16 @@ public class CatFactsModule extends Module {
     }
 
     /**
-     * Asynchronously fetches a cat fact from the configured API and sends it in chat.
+     * Manually triggers a cat fact to be fetched and sent in chat.
+     * Can be called regardless of whether the module is active.
+     */
+    public void triggerCatFact() {
+        sendCatFact();
+    }
+
+    /**
+     * Asynchronously fetches a cat fact from the resolved API and sends it in chat.
+     * Falls back to the configured fallback message on failure.
      */
     private void sendCatFact() {
         CompletableFuture.runAsync(() -> {
@@ -210,9 +230,12 @@ public class CatFactsModule extends Module {
                 String fact = fetchFact();
                 if (fact != null && !fact.isEmpty()) {
                     ChatUtils.sendPlayerMsg(fact);
+                } else {
+                    ChatUtils.sendPlayerMsg(fallbackMessage.get());
                 }
             } catch (Exception e) {
-                warning("Failed to fetch cat fact.");
+                warning("Failed to fetch cat fact, sending fallback.");
+                ChatUtils.sendPlayerMsg(fallbackMessage.get());
                 e.printStackTrace();
             }
         });
@@ -226,7 +249,7 @@ public class CatFactsModule extends Module {
      */
     private String fetchFact() throws Exception {
         String apiUrl = resolveApiUrl();
-        URL url = new URL(apiUrl);
+        URL url = URI.create(apiUrl).toURL();
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         conn.setRequestProperty("User-Agent", "Meteor Client Addon");
@@ -248,7 +271,7 @@ public class CatFactsModule extends Module {
      * Supports both catfacts.cc and meowfacts response formats.
      *
      * @param json the raw JSON string from the API
-     * @return the extracted fact, or a fallback message if parsing fails
+     * @return the extracted fact, or null if parsing fails
      */
     private String extractFactFromJson(String json) {
         Pattern pattern = Pattern.compile("\"data\"\\s*:\\s*\\[\\s*\"(.*?)\"\\s*]");
@@ -256,7 +279,7 @@ public class CatFactsModule extends Module {
         if (matcher.find()) {
             return matcher.group(1);
         }
-        return "Cats are mysterious (Error parsing fact).";
+        return null;
     }
 
     /**
