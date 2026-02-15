@@ -8,9 +8,16 @@ import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 
+/**
+ * A HUD element that displays the remaining messages or time until the next cat fact is sent.
+ * Adapts its display based on the active interval mode of the CatFactsModule.
+ */
 public class CatFactsHud extends HudElement {
-    public static final HudElementInfo<CatFactsHud> INFO = new HudElementInfo<>(CatFactsAddon.HUD_GROUP, "cat-facts-hud", "Displays messages left until next cat fact.", CatFactsHud::new);
+    public static final HudElementInfo<CatFactsHud> INFO = new HudElementInfo<>(CatFactsAddon.HUD_GROUP, "cat-facts-hud", "Displays time or messages left until next cat fact.", CatFactsHud::new);
 
+    /**
+     * Constructs the CatFactsHud element.
+     */
     public CatFactsHud() {
         super(INFO);
     }
@@ -23,7 +30,11 @@ public class CatFactsHud extends HudElement {
         Color color;
 
         if (module != null && module.isActive()) {
-            text = "Next Fact: " + module.getMessagesLeft() + " msgs";
+            if (module.getIntervalMode() == CatFactsModule.IntervalMode.TIME) {
+                text = "Next Fact: " + module.getFormattedTimeLeft();
+            } else {
+                text = "Next Fact: " + module.getMessagesLeft() + " msgs";
+            }
             color = Color.WHITE;
         } else {
             text = "Cat Facts: Disabled";
