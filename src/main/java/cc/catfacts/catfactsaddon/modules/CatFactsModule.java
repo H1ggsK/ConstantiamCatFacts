@@ -49,7 +49,7 @@ public class CatFactsModule extends Module {
     private void onMessageReceive(ReceiveMessageEvent event) {
         messageCounter++;
 
-        if (messageCounter >= messageInterval.get()) {
+        if (messageCounter >= (messageInterval.get()+1)) {
             messageCounter = 0;
             sendCatFact();
         }
@@ -98,6 +98,6 @@ public class CatFactsModule extends Module {
     }
 
     public int getMessagesLeft() {
-        return Math.max(0, messageInterval.get() - messageCounter);
+        return Math.max(0, (messageInterval.get()+1) - messageCounter);
     }
 }
